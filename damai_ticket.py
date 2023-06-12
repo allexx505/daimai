@@ -10,8 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 
 class Concert(object):
-    def __init__(self, date, session, price, real_name, nick_name, ticket_num, damai_url, target_url,driver_path):
-        self.date = date  # 日期序号
+    def __init__(self, session, price, real_name, nick_name, ticket_num, damai_url, target_url,driver_path):
         self.session = session  # 场次序号优先级
         self.price = price  # 票价序号优先级
         self.real_name = real_name  # 实名者序号
@@ -70,7 +69,8 @@ class Concert(object):
     def login(self):
         print(u'###开始登录###')
         self.driver.get(self.target_url)
-        WebDriverWait(self.driver, 10, 0.1).until(EC.title_contains('大麦网'))
+        WebDriverWait(self.driver, 10, 0.1).until(EC.title_contains('商品详情'))
+        print(u'###登录成功###')
         self.set_cookie()
 
     def enter_concert(self):
@@ -98,7 +98,7 @@ class Concert(object):
         try:
             # 等待nickname出现
             locator = (By.XPATH, "/html/body/div[1]/div/div[3]/div[1]/a[2]/div")
-            WebDriverWait(self.driver, 5, 0.3).until(EC.text_to_be_present_in_element(locator, self.nick_name))
+            # WebDriverWait(self.driver, 5, 0.3).until(EC.text_to_be_present_in_element(locator, self.nick_name))
             self.status = 1
             print(u"###登录成功###")
             self.time_start = time()
@@ -110,6 +110,7 @@ class Concert(object):
     # 实现购买函数
     def choose_ticket(self):
         print(u"###进入抢票界面###")
+        
         while self.driver.title.find('确认订单') == -1:  # 如果跳转到了确认界面就算这步成功了，否则继续执行此步
             self.num += 1  #尝试次数加1
 
@@ -118,20 +119,45 @@ class Concert(object):
 
             # 确认页面刷新成功
             try:
-                box = WebDriverWait(self.driver, 1, 0.1).until(EC.presence_of_element_located((By.CLASS_NAME, 'perform__order__box')))
+                box = WebDriverWait(self.driver, 1, 0.1).until(EC.presence_of_element_located((By.CLASS_NAME, 'detail-tour')))
             except:
                 raise Exception(u"***Error: 页面刷新出错***")
 
-            try:
-                realname_popup = box.find_elements_by_xpath("//div[@class='realname-popup']")  # 寻找实名身份遮罩
-                if len(realname_popup) != 0:
-                    known_button = realname_popup[0].find_elements_by_xpath("//div[@class='operate']//div[@class='button']")
-                    known_button[0].click()
-            except:
-                raise Exception(u"***Error: 实名制遮罩关闭失败***")
+                 # 关闭实名
+        
+            # 进行选座购买按钮点击
+            con.driver.find_element(By.CLASS_NAME, 'buy__button').click()
 
+            # 进行日期选择操作
+            print("选择具体日子")
+            day_item_list = self.web_driver.find_elements_by_class_name('item-text item-text-normal')
+            for day_item in day_item_list:
+                day_str = str(day_item.get_attribute('innerText'))
+                if '2023-06-18' in day_str:
+                    print(f"选中该日期{day_str}，进行点击")
+                    day_item.click()
+                    break
+
+            element_list = self.web_driver.find_elements_by_class_name('item-text item-text-normal')
+            print(len(element_list))
+            for element in element_list:
+                data_value = str(element.get_attribute('innerText'))
+                print(f"data_value:{data_value}")
+                if data_value.count(self.rob_price) > 0:
+                    print("选择票档")
+                    element.click()
+
+            '''
+            接下来的逻辑都需要重写
+            1. 选择具体的场次和票价
+            2. 如果显示无票，则直接raise error，并重新刷新页面
+            3. 如果发现是有票，那么直接遍历所有票档
+            4. 如果显示缺货登记，则直接raise error，并重新刷新页面
+            5. 
+            '''
+            #region 选票，选座逻辑
             try:
-                buybutton = box.find_element_by_class_name('buybtn') # 寻找立即购买标签
+                buybutton = box.find_element_by_class_name('buy__button') # 寻找立即购买标签
                 buybutton_text = buybutton.text
             except:
                 raise Exception(u"***Error: buybutton 位置找不到***")
@@ -141,26 +167,14 @@ class Concert(object):
                 raise Exception(u"---尚未开售，刷新等待---")
 
             try:
-                selects = box.find_elements_by_class_name('perform__order__select') # 日期、场次和票档进行定位
-                date = None  # 有的演出没有日期的选项
+                selects = box.find_elements_by_class_name('perform__order__select') # 场次和票档进行定位
                 for item in selects:
-                    if item.find_element_by_class_name('select_left').text == '日期':
-                        date = item
-                        # print('\t日期定位成功')
-                    elif item.find_element_by_class_name('select_left').text == '场次':
+                    if item.find_element_by_class_name('select_left').text == '场次':
                         session = item
                         # print('\t场次定位成功')
                     elif item.find_element_by_class_name('select_left').text == '票档':
                         price = item
                         # print('\t票档定位成功')
-
-                if date is not None:
-                    date_list = date.find_elements_by_xpath("//div[@class='wh_content_item']//div[starts-with(@class,'wh_item_date')]") #选定日期
-                    # print('可选日期数量为：{}'.format(len(date_list)))
-                    for i in self.date:
-                        j = date_list[i-1]
-                        j.click()
-                        break
 
                 session_list = session.find_elements_by_class_name('select_right_list_item')#选定场次
                 # print('可选场次数量为：{}'.format(len(session_list)))
@@ -171,9 +185,6 @@ class Concert(object):
                         if k.text == '无票':
                             continue
                         elif k.text == '预售':
-                            j.click()
-                            break
-                        elif k.text == '惠':
                             j.click()
                             break
                     else:
@@ -191,7 +202,16 @@ class Concert(object):
                         j.click()#选定好票档点击确定
                         break
             except:
-                raise Exception(u"***Error: 选择日期or场次or票档不成功***")
+                raise Exception(u"***Error: 选择场次or票档不成功***")
+            # region 选票，选座逻辑
+
+            '''
+            1. 修改数量，变成2
+            2. 下一步，直接点击 “确定“按钮
+            3. 此时直接跳转到订单界面
+            4. 选择实名观演人，1和2
+            5. 直接提交订单，并提示用户到app上进行支付
+            '''
 
             try:
                 ticket_num_up = box.find_element_by_class_name('cafe-c-input-number-handler-up')
@@ -264,15 +284,21 @@ class Concert(object):
 
 
 if __name__ == '__main__':
-    try:
-        with open('./config.json', 'r', encoding='utf-8') as f:
-            config = loads(f.read())
-            # params: 场次优先级，票价优先级，实名者序号, 用户昵称， 购买票数， 官网网址， 目标网址, 浏览器驱动地址
-        con = Concert(config['date'], config['sess'], config['price'], config['real_name'], config['nick_name'], config['ticket_num'], config['damai_url'], config['target_url'], config['driver_path'])
-        con.enter_concert() #进入到具体抢购页面
-    except Exception as e:
-        print(e)
-        exit(1)
+    with open('./config.json', 'r', encoding='utf-8-sig') as f:
+        config = loads(f.read())
+        # params: 场次优先级，票价优先级，实名者序号, 用户昵称， 购买票数， 官网网址， 目标网址, 浏览器驱动地址
+    con = Concert(config['sess'], config['price'], config['real_name'], config['nick_name'], config['ticket_num'],
+                  config['damai_url'], config['target_url'], config['driver_path'])
+    con.enter_concert()
+    # try:
+    #     with open('./config.json', 'r', encoding='utf-8-sig') as f:
+    #         config = loads(f.read())
+    #         # params: 场次优先级，票价优先级，实名者序号, 用户昵称， 购买票数， 官网网址， 目标网址, 浏览器驱动地址
+    #     con = Concert(config['sess'], config['price'], config['real_name'], config['nick_name'], config['ticket_num'], config['damai_url'], config['target_url'], config['driver_path'])
+    #     con.enter_concert() #进入到具体抢购页面
+    # except Exception as e:
+    #     print(e)
+    #     exit(1)
     while True:
         try:
             con.choose_ticket()
@@ -285,3 +311,4 @@ if __name__ == '__main__':
         if con.status == 6:
             print(u"###经过%d轮奋斗，共耗时%.1f秒，抢票成功！请确认订单信息###" % (con.num, round(con.time_end-con.time_start, 3)))
             break
+    # 五月天杭州场次 721069251830
