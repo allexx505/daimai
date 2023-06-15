@@ -1,4 +1,5 @@
 # coding: utf-8
+import sys
 from json import loads
 from time import sleep, time
 from pickle import dump, load
@@ -24,6 +25,7 @@ class Concert(object):
         self.target_url = target_url  # 目标购票网址
         self.driver_path = driver_path  # 浏览器驱动地址
         self.driver = None
+        self.chrome_option = None
 
     def isClassPresent(self, item, name, ret=False):
         try:
@@ -53,14 +55,10 @@ class Concert(object):
             cookies = load(open("cookies.pkl", "rb"))  # 载入cookie
             for cookie in cookies:
                 cookie_dict = {
-                    'domain':'.damai.cn',  # 必须有，不然就是假登录
+                    'domain': '.damai.cn',  # 必须要有的, 否则就是假登录
                     'name': cookie.get('name'),
-                    'value': cookie.get('value'),
-                    "expires": "",
-                    'path': '/',
-                    'httpOnly': False,
-                    'HostOnly': False,
-                    'Secure': False}
+                    'value': cookie.get('value')
+                }
                 self.driver.add_cookie(cookie_dict)
             print(u'###载入Cookie###')
         except Exception as e:
@@ -81,23 +79,22 @@ class Concert(object):
             print(u'###成功获取Cookie，重启浏览器###')
             self.driver.quit()
 
-        options = webdriver.ChromeOptions()
-        # 禁止图片、js、css加载
-        prefs = {"profile.managed_default_content_settings.images": 2,
-                 "profile.managed_default_content_settings.javascript": 1,
-                 'permissions.default.stylesheet': 2}
-        options.add_experimental_option("prefs", prefs)
+        self.chrome_option = webdriver.ChromeOptions()
+        self.chrome_option.add_experimental_option('excludeSwitches', ['enable-automation'])
+        self.chrome_option.add_argument('--disable-blink-features=AutomationControlled')
+        self.chrome_option.add_experimental_option("mobileEmulation", {"deviceName": "iPhone 6"})
+        self.chrome_option.add_argument("--auto-open-devtools-for-tabs")
 
         # 更换等待策略为不等待浏览器加载完全就进行下一步操作
         capa = DesiredCapabilities.CHROME
         capa["pageLoadStrategy"] = "none"
-        self.driver = webdriver.Chrome(executable_path=self.driver_path, options=options, desired_capabilities=capa)
+        self.driver = webdriver.Chrome(executable_path=rf'D://python_demo//damai-ticker//chromedriver.exe',options=self.chrome_option)
         # 登录到具体抢购页面
         self.login()
         self.driver.refresh()
         try:
             # 等待nickname出现
-            locator = (By.XPATH, "/html/body/div[1]/div/div[3]/div[1]/a[2]/div")
+            # locator = (By.XPATH, "/html/body/div[1]/div/div[3]/div[1]/a[2]/div")
             # WebDriverWait(self.driver, 5, 0.3).until(EC.text_to_be_present_in_element(locator, self.nick_name))
             self.status = 1
             print(u"###登录成功###")
@@ -114,7 +111,7 @@ class Concert(object):
         while self.driver.title.find('确认订单') == -1:  # 如果跳转到了确认界面就算这步成功了，否则继续执行此步
             self.num += 1  #尝试次数加1
 
-            if con.driver.current_url.find("buy.damai.cn") != -1:
+            if self.driver.current_url.find("buy.damai.cn") != -1:
                 break
 
             # 确认页面刷新成功
@@ -126,19 +123,33 @@ class Concert(object):
                  # 关闭实名
         
             # 进行选座购买按钮点击
-            con.driver.find_element(By.CLASS_NAME, 'buy__button').click()
+            print("等待主页面刷新")
+            import time
+            # todo 需要尽量调小时间
+            if self.num == 1:
+                #第一次等待时间长一点
+                time.sleep(3)
+            else:
+                time.sleep(0.1)
+            print("点击购买按钮")
+            self.driver.find_element(By.CLASS_NAME, 'buy__button').click()
 
             # 进行日期选择操作
             print("选择具体日子")
-            day_item_list = self.web_driver.find_elements_by_class_name('item-text item-text-normal')
+            date0618 = self.driver.find_elements(By.CLASS_NAME, "item-text.item-text-normal")
+            print(f"date_text:{len(date0618)}")
+            # day_item_list = self.driver.find_elements(By.CLASS_NAME, 'item-content.item-text.item-text-normal')
+            # print(f"day_item_list_len:{len(sku_pop_wrapper)}")
+            sys.exit(0)
             for day_item in day_item_list:
                 day_str = str(day_item.get_attribute('innerText'))
+                print(f"day_str:{day_str}")
+                sys.exit(0)
                 if '2023-06-18' in day_str:
                     print(f"选中该日期{day_str}，进行点击")
                     day_item.click()
                     break
-
-            element_list = self.web_driver.find_elements_by_class_name('item-text item-text-normal')
+            element_list = self.driver.find_elements_by_class_name('item-text.item-text-normal')
             print(len(element_list))
             for element in element_list:
                 data_value = str(element.get_attribute('innerText'))
